@@ -56,8 +56,10 @@ func main() {
 		article.Content, err = page.InnerHTML(".article-detail .article-content", playwright.PageInnerHTMLOptions{
 			Strict: &strict,
 		})
-		raw, _ := json.Marshal(article)
-		log.Printf("article: %s\n", raw)
+		if article.Content != "" {
+			raw, _ := json.Marshal(article)
+			log.Printf("article: %s\n", raw)
+		}
 	}
 }
 
