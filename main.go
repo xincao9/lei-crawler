@@ -51,8 +51,7 @@ func main() {
 		var article Article
 		article.Title, _ = page.Locator(".article-detail .title").TextContent()
 		article.Info.PublishTime, _ = page.Locator(".article-detail .article-info .publish-time").TextContent()
-		var strict bool
-		strict = true
+		strict := true
 		article.Content, err = page.InnerHTML(".article-detail .article-content", playwright.PageInnerHTMLOptions{
 			Strict: &strict,
 		})
