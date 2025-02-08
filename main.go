@@ -2,19 +2,25 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/playwright-community/playwright-go"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 	"io"
 	"log"
 	"net/http"
 	"strings"
-
-	"github.com/playwright-community/playwright-go"
+	"time"
 )
 
 var (
 	pw *playwright.Playwright
+	db *gorm.DB
 )
 
 func init() {
@@ -22,6 +28,10 @@ func init() {
 	pw, err = playwright.Run()
 	if err != nil {
 		log.Fatalf("Open playwright error: %v", err)
+	}
+	db, err = gorm.Open(mysql.Open("root:123456@tcp(localhost:3306)/leisu?charset=utf8&parseTime=true&loc=Local"))
+	if err != nil {
+		log.Fatalf("Open mysql error: %v\n", db)
 	}
 }
 
@@ -71,15 +81,59 @@ func dynamicIP() []string {
 }
 
 type Article struct {
-	Title string `json:"article"`
-	Info  struct {
-		PublishTime string `json:"publish-time"`
-	} `json:"info"`
-	Content string `json:"content"`
-	Img     string `json:"img"`
+	Id          int64      `json:"id" gorm:"primary_key"`
+	Title       string     `json:"title" gorm:"column:title"`
+	PublishTime string     `json:"publish-time" gorm:"column:publish_time"`
+	Content     string     `json:"content" gorm:"column:content"`
+	Img         string     `json:"img" gorm:"column:img"`
+	Sport       string     `json:"sport" gorm:"column:sport"`
+	Md5         string     `json:"md5" gorm:"column:md5"` // 根据Content计算MD5
+	CreatedAt   time.Time  `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt   time.Time  `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt   *time.Time `json:"deleted_at" gorm:"column:deleted_at"`
 }
 
 func main() {
+	configs := []struct {
+		listUri   string
+		startPage int
+		endPage   int
+		sport     string
+	}{
+		{
+			listUri:   "https://www.leisu.com/news/catalog-zuqiu/%d", // 足球
+			startPage: 1,
+			endPage:   5462,
+			sport:     "football",
+		},
+		{
+			listUri:   "https://www.leisu.com/news/catalog-1/%d", // 足球综合
+			startPage: 1,
+			endPage:   2173,
+			sport:     "football",
+		},
+		{
+			listUri:   "https://www.leisu.com/news/catalog-lanqiu/%d", // 篮球
+			startPage: 1,
+			endPage:   1860,
+			sport:     "basketball",
+		},
+		{
+			listUri:   "https://www.leisu.com/news/catalog-4/%d", // 篮球综合
+			startPage: 1,
+			endPage:   152,
+			sport:     "basketball",
+		},
+	}
+	for _, config := range configs {
+		for pageNo := config.startPage; pageNo <= config.endPage; pageNo++ {
+			// 真正使用，需要改为并发模式
+			crawler(fmt.Sprintf(config.listUri, pageNo), config.sport)
+		}
+	}
+}
+
+func crawler(listUri string, sport string) {
 	browser, page, err := NewBrowser()
 	defer func() {
 		if browser != nil {
@@ -95,7 +149,7 @@ func main() {
 		log.Printf("NewBrowser err: %v\n", err)
 		return
 	}
-	uris, err := uris(page, "https://www.leisu.com/news/catalog-zuqiu")
+	uris, err := uris(page, listUri)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
@@ -106,15 +160,34 @@ func main() {
 			continue
 		}
 		var article Article
+		article.Sport = sport
 		article.Title, _ = page.Locator(".article-detail .title").TextContent()
-		article.Info.PublishTime, _ = page.Locator(".article-detail .article-info .publish-time").TextContent()
+		article.PublishTime, _ = page.Locator(".article-detail .article-info .publish-time").TextContent()
 		article.Content, _ = page.Locator(".article-detail .article-content").TextContent()
 		article.Img, _ = page.Locator(".article-detail img").GetAttribute("src")
 		if strings.TrimSpace(article.Content) != "" {
+			article.Md5 = Sum(article.Content)
 			raw, _ := json.Marshal(article)
+			save(&article)
 			log.Printf("article: %s\n", raw)
 		}
 	}
+}
+
+func save(article *Article) {
+	var oArticle Article
+	db.First(&oArticle, "md5 = ?", article.Md5)
+	if oArticle.Id > 0 {
+		article.Id = oArticle.Id
+	}
+	db.Save(article)
+}
+
+func Sum(text string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(text))
+	hashBytes := hasher.Sum(nil)
+	return hex.EncodeToString(hashBytes)
 }
 
 func uris(page playwright.Page, p string) ([]string, error) {
