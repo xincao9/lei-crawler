@@ -92,6 +92,7 @@ type Article struct {
 
 func main() {
 	t := flag.String("type", "", "competitions or crawArticle")
+	flag.Parse()
 	if *t == "competitions" {
 		competitions()
 	} else if *t == "crawArticle" {
@@ -119,9 +120,9 @@ func competitions() {
 		log.Printf("error: %v\n", err)
 		return
 	}
+	m := make(map[string]string)
 	competitions, _ := page.Locator(".competition-levels .competition a").All()
 	for _, competition := range competitions {
-		m := make(map[string]string)
 		name, _ := competition.TextContent()
 		id, _ := competition.GetAttribute("href")
 		if id != "" {
@@ -131,9 +132,9 @@ func competitions() {
 			}
 		}
 		m[id] = name
-		bytes, _ := json.Marshal(m)
-		log.Printf("%s", bytes)
 	}
+	data, _ := json.Marshal(m)
+	log.Printf("%s", data)
 }
 
 func crawArticle() {
