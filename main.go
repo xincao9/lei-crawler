@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/playwright-community/playwright-go"
@@ -28,10 +29,6 @@ func init() {
 	pw, err = playwright.Run()
 	if err != nil {
 		log.Fatalf("Open playwright error: %v", err)
-	}
-	db, err = gorm.Open(mysql.Open("root:123456@tcp(localhost:3306)/leisu?charset=utf8&parseTime=true&loc=Local"))
-	if err != nil {
-		log.Fatalf("Open mysql error: %v\n", db)
 	}
 }
 
@@ -94,6 +91,57 @@ type Article struct {
 }
 
 func main() {
+	t := flag.String("type", "", "competitions or crawArticle")
+	if *t == "competitions" {
+		competitions()
+	} else if *t == "crawArticle" {
+		crawArticle() // 抓取全量文章
+	}
+}
+
+func competitions() {
+	browser, page, err := NewBrowser()
+	if err != nil {
+		log.Printf("NewBrowser err: %v\n", err)
+		return
+	}
+	defer func() {
+		if browser != nil {
+			err = browser.Close()
+			log.Printf("browser.Close err: %v\n", err)
+		}
+		if pw != nil {
+			err = pw.Stop()
+			log.Printf("pw.Stop err: %v\n", err)
+		}
+	}()
+	if _, err = page.Goto("https://www.leisu.com/data/zuqiu/comp-120"); err != nil {
+		log.Printf("error: %v\n", err)
+		return
+	}
+	competitions, _ := page.Locator(".competition-levels .competition a").All()
+	for _, competition := range competitions {
+		m := make(map[string]string)
+		name, _ := competition.TextContent()
+		id, _ := competition.GetAttribute("href")
+		if id != "" {
+			ss := strings.Split(id, "-")
+			if len(ss) > 0 {
+				id = ss[len(ss)-1]
+			}
+		}
+		m[id] = name
+		bytes, _ := json.Marshal(m)
+		log.Printf("%s", bytes)
+	}
+}
+
+func crawArticle() {
+	var err error
+	db, err = gorm.Open(mysql.Open("root:123456@tcp(localhost:3306)/leisu?charset=utf8&parseTime=true&loc=Local"))
+	if err != nil {
+		log.Fatalf("Open mysql error: %v\n", db)
+	}
 	configs := []struct {
 		listUri   string
 		startPage int
@@ -135,6 +183,10 @@ func main() {
 
 func crawler(listUri string, sport string) {
 	browser, page, err := NewBrowser()
+	if err != nil {
+		log.Printf("NewBrowser err: %v\n", err)
+		return
+	}
 	defer func() {
 		if browser != nil {
 			err = browser.Close()
@@ -145,10 +197,6 @@ func crawler(listUri string, sport string) {
 			log.Printf("pw.Stop err: %v\n", err)
 		}
 	}()
-	if err != nil {
-		log.Printf("NewBrowser err: %v\n", err)
-		return
-	}
 	uris, err := uris(page, listUri)
 	if err != nil {
 		log.Printf("error: %v\n", err)
