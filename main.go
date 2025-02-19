@@ -81,16 +81,16 @@ func dynamicIP() []string {
 }
 
 type Article struct {
-	Id          int64      `json:"id" gorm:"primary_key"`
-	Title       string     `json:"title" gorm:"column:title"`
-	PublishTime string     `json:"publish-time" gorm:"column:publish_time"`
-	Content     string     `json:"content" gorm:"column:content"`
-	Img         string     `json:"img" gorm:"column:img"`
-	Sport       string     `json:"sport" gorm:"column:sport"`
-	Md5         string     `json:"md5" gorm:"column:md5"` // 根据Content计算MD5
-	CreatedAt   time.Time  `json:"created_at" gorm:"column:created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" gorm:"column:updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at" gorm:"column:deleted_at"`
+	Id          int64     `json:"id" gorm:"primary_key"`
+	Title       string    `json:"title" gorm:"column:title"`
+	PublishTime string    `json:"publish-time" gorm:"column:publish_time"`
+	Content     string    `json:"content" gorm:"column:content"`
+	Img         string    `json:"img" gorm:"column:img"`
+	Sport       string    `json:"sport" gorm:"column:sport"`
+	Md5         string    `json:"md5" gorm:"column:md5"` // 根据Content计算MD5
+	CreatedAt   time.Time `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt   time.Time `json:"deleted_at" gorm:"column:deleted_at"`
 }
 
 func main() {
@@ -208,11 +208,10 @@ func crawler(listUri string, sport string) {
 		article.PublishTime, _ = page.Locator(".article-detail .article-info .publish-time").TextContent()
 		article.Content, _ = page.Locator(".article-detail .article-content").TextContent()
 		article.Img, _ = page.Locator(".article-detail img").GetAttribute("src")
-		if strings.TrimSpace(article.Content) != "" {
+		article.Content = strings.TrimSpace(article.Content)
+		if article.Content != "" {
 			article.Md5 = Sum(article.Content)
-			raw, _ := json.Marshal(article)
 			save(&article)
-			log.Printf("article: %s\n", raw)
 		}
 	}
 }
