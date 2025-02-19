@@ -25,6 +25,7 @@ var (
 )
 
 func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	var err error
 	pw, err = playwright.Run()
 	if err != nil {
@@ -61,13 +62,15 @@ type DynamicIP struct {
 }
 
 func dynamicIP() []string {
-	resp, err := http.Get("http://list.sky-ip.net/user_get_ip_list?token=ywtPFyCzEaKqVjKG1666769437853&type=datacenter&qty=1&country=&time=5&format=json&protocol=http")
+	resp, err := http.Get("http://list.sky-ip.net/user_get_ip_list?token=xjOhpPWjBcQ3lIYH1739518234972&type=datacenter&qty=1&country=&time=5&format=json&protocol=http")
 	if err != nil {
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 	buf := bytes.Buffer{}
-	io.Copy(&buf, resp.Body)
+	_, _ = io.Copy(&buf, resp.Body)
 	log.Printf("dynamicIP resp: %s", buf.String())
 	var dip DynamicIP
 	err = json.Unmarshal(buf.Bytes(), &dip)
@@ -91,31 +94,32 @@ type Article struct {
 }
 
 func main() {
-	t := flag.String("type", "", "competitions or crawArticle")
+	t := flag.String("type", "", "competitions or crawArticle or install")
 	flag.Parse()
 	if *t == "competitions" {
 		competitions()
 	} else if *t == "crawArticle" {
 		crawArticle() // 抓取全量文章
+	} else if *t == "install" {
+		install()
+	}
+}
+
+func install() {
+	err := playwright.Install()
+	if err != nil {
+		log.Fatalf("playwright.Install error: %v\n", err)
+	} else {
+		log.Printf("playwright.Install success\n")
 	}
 }
 
 func competitions() {
-	browser, page, err := NewBrowser()
+	_, page, err := NewBrowser()
 	if err != nil {
 		log.Printf("NewBrowser err: %v\n", err)
 		return
 	}
-	defer func() {
-		if browser != nil {
-			err = browser.Close()
-			log.Printf("browser.Close err: %v\n", err)
-		}
-		if pw != nil {
-			err = pw.Stop()
-			log.Printf("pw.Stop err: %v\n", err)
-		}
-	}()
 	if _, err = page.Goto("https://www.leisu.com/data/zuqiu/comp-120"); err != nil {
 		log.Printf("error: %v\n", err)
 		return
@@ -183,21 +187,11 @@ func crawArticle() {
 }
 
 func crawler(listUri string, sport string) {
-	browser, page, err := NewBrowser()
+	_, page, err := NewBrowser()
 	if err != nil {
 		log.Printf("NewBrowser err: %v\n", err)
 		return
 	}
-	defer func() {
-		if browser != nil {
-			err = browser.Close()
-			log.Printf("browser.Close err: %v\n", err)
-		}
-		if pw != nil {
-			err = pw.Stop()
-			log.Printf("pw.Stop err: %v\n", err)
-		}
-	}()
 	uris, err := uris(page, listUri)
 	if err != nil {
 		log.Printf("error: %v\n", err)
@@ -233,9 +227,9 @@ func save(article *Article) {
 }
 
 func Sum(text string) string {
-	hasher := md5.New()
-	hasher.Write([]byte(text))
-	hashBytes := hasher.Sum(nil)
+	harsher := md5.New()
+	harsher.Write([]byte(text))
+	hashBytes := harsher.Sum(nil)
 	return hex.EncodeToString(hashBytes)
 }
 
